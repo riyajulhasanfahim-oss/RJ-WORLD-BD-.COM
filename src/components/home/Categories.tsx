@@ -84,10 +84,9 @@ export default function Categories() {
           onMouseLeave={handleMouseLeave}
           onMouseUp={handleMouseUp}
           onMouseMove={handleMouseMove}
-          className="flex overflow-x-auto gap-2.5 sm:gap-3.5 pb-1 hide-scrollbar snap-x snap-mandatory touch-pan-x cursor-grab active:cursor-grabbing select-none"
+          className="flex overflow-x-auto gap-2.5 sm:gap-3.5 pb-1 hide-scrollbar snap-x scroll-smooth cursor-grab active:cursor-grabbing"
           style={{
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehaviorX: 'contain'
+            WebkitOverflowScrolling: 'touch'
           }}
         >
           {MAIN_CATEGORIES.map((category, index) => (

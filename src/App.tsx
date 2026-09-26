@@ -148,6 +148,7 @@ import ResellerSupport from "./pages/reseller/support/ResellerSupport";
 
 // Routes
 import { PrivateRoute, PublicRoute, VendorRoute, ResellerRoute, AdminRoute, UserPanelRoute } from "./components/ProtectedRoute";
+import SplashScreen from "./components/common/SplashScreen";
 
 export default function App() {
   useEffect(() => {
@@ -156,6 +157,7 @@ export default function App() {
 
   return (
     <AuthProvider>
+      <SplashScreen />
       <NotificationProvider>
         <VendorStoreProvider>
           <VendorNotificationProvider>
