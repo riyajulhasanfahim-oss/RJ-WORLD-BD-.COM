@@ -20,7 +20,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
 
     const checkTimer = setTimeout(() => {
       if (onFinish) onFinish();
-    }, 2200);
+    }, 3000);
 
     return () => clearTimeout(checkTimer);
   }, [onFinish]);

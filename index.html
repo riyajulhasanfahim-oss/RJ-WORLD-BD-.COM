@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RJ WORLD BD - E-commerce & Reseller Marketplace</title>
     <meta name="description" content="RJ WORLD BD - Premier E-Commerce, Reselling & Multi-Vendor Marketplace in Bangladesh" />
-    <meta name="theme-color" content="#0EA5E9" />
+    <meta name="theme-color" content="#030814" />
     <meta name="application-name" content="RJ World" />
     <meta name="apple-mobile-web-app-title" content="RJ World" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -132,20 +132,16 @@
         <div class="rj-ring rj-ring-2"></div>
         <div class="rj-ring rj-ring-3"></div>
 
-        <!-- Glassmorphic Squircle Badge with Electric Blue Glow -->
-        <div class="rj-badge-wrap">
-          <div class="rj-badge-glow"></div>
-          <div class="rj-badge">
-            <!-- Shimmer Light Sweep -->
-            <div class="rj-shimmer"></div>
-            <!-- Genuine Logo with 100% Transparent Background (No white corners) -->
-            <img
-              src="/rj-world-logo.png"
-              alt="RJ WORLD BD"
-              class="rj-logo-img"
-              draggable="false"
-            />
-          </div>
+        <!-- Pure RJ WORLD BD Globe Presentation with Radiant Blue Light Aura (Zero square/rectangle background) -->
+        <div class="rj-logo-pure-wrap">
+          <div class="rj-logo-blue-glow"></div>
+          <div class="rj-shimmer-sweep"></div>
+          <img
+            src="/rj-world-logo.png"
+            alt="RJ WORLD BD"
+            class="rj-logo-pure-img"
+            draggable="false"
+          />
         </div>
 
         <!-- Brand Name & Description with Glowing Blue Gradient -->
@@ -243,7 +239,7 @@
       }
       .rj-ring {
         position: absolute;
-        top: 60px;
+        top: 70px;
         left: 50%;
         transform: translate(-50%, -50%);
         border-radius: 50%;
@@ -269,47 +265,41 @@
         border: 1px dashed rgba(125, 211, 252, 0.2);
         animation: rjRingRotate 20s linear infinite;
       }
-      .rj-badge-wrap {
+      .rj-logo-pure-wrap {
         position: relative;
-      }
-      .rj-badge-glow {
-        position: absolute;
-        inset: -6px;
-        border-radius: 34px;
-        background: linear-gradient(135deg, rgba(56, 189, 248, 0.55), rgba(37, 99, 235, 0.4), rgba(29, 78, 216, 0.6));
-        filter: blur(12px);
-        opacity: 0.85;
-        animation: rjBadgeGlow 2.5s ease-in-out infinite alternate;
-      }
-      .rj-badge {
-        position: relative;
-        width: 120px;
-        height: 120px;
-        border-radius: 28px;
-        padding: 12px;
+        width: 140px;
+        height: 140px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(145deg, rgba(29, 78, 216, 0.45) 0%, rgba(15, 23, 42, 0.85) 100%);
-        border: 1.5px solid rgba(56, 189, 248, 0.65);
-        box-shadow: 0 0 35px rgba(37, 99, 235, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 16px 36px rgba(0, 0, 0, 0.65);
-        overflow: hidden;
+        background: transparent !important;
       }
-      .rj-shimmer {
+      .rj-logo-blue-glow {
+        position: absolute;
+        inset: 4px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.5) 0%, rgba(37, 99, 235, 0.3) 50%, transparent 75%);
+        filter: blur(18px);
+        opacity: 0.9;
+        pointer-events: none;
+        animation: rjLogoGlow 2.5s ease-in-out infinite alternate;
+      }
+      .rj-shimmer-sweep {
         position: absolute;
         inset: 0;
-        transform: translateX(-150%) skewX(-15deg);
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-        animation: rjShimmer 2.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 50%;
         pointer-events: none;
+        background: linear-gradient(135deg, transparent 20%, rgba(255, 255, 255, 0.28) 50%, transparent 80%);
+        opacity: 0;
+        animation: rjPureShimmer 2.4s infinite cubic-bezier(0.4, 0, 0.2, 1);
       }
-      .rj-logo-img {
+      .rj-logo-pure-img {
         width: 100%;
         height: 100%;
         object-fit: contain;
         background: transparent !important;
-        filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 14px rgba(56, 189, 248, 0.35));
-        animation: rjLogoReveal 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.55));
+        animation: rjLogoReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
       .rj-brand-info {
         margin-top: 24px;
@@ -366,17 +356,24 @@
       }
 
       @keyframes rjLogoReveal {
-        0% { transform: scale(0.82); opacity: 0; }
-        50% { transform: scale(1.05); opacity: 1; }
+        0% { transform: scale(0.85); opacity: 0; }
+        45% { transform: scale(1.06); opacity: 1; }
+        70% { transform: scale(0.98); }
         100% { transform: scale(1); opacity: 1; }
       }
       @keyframes rjFadeUp {
         0% { transform: translateY(12px); opacity: 0; }
         100% { transform: translateY(0); opacity: 1; }
       }
-      @keyframes rjBadgeGlow {
-        0% { opacity: 0.65; transform: scale(0.98); }
-        100% { opacity: 0.95; transform: scale(1.03); }
+      @keyframes rjLogoGlow {
+        0% { opacity: 0.6; transform: scale(0.95); }
+        100% { opacity: 1; transform: scale(1.08); }
+      }
+      @keyframes rjPureShimmer {
+        0% { opacity: 0; transform: rotate(0deg) scale(0.85); }
+        30% { opacity: 0.8; }
+        60% { opacity: 0.3; }
+        100% { opacity: 0; transform: rotate(180deg) scale(1.15); }
       }
       @keyframes rjPulseAura {
         0% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.7; }
@@ -433,16 +430,16 @@
           }
         };
 
-        // Minimum display duration for a complete, satisfying animation (2000ms)
+        // Minimum display duration: exactly 3.0 seconds (3000ms) per user specification
         setTimeout(function() {
           minTimePassed = true;
           if (appReady) {
             dismiss();
           }
-        }, 2000);
+        }, 3000);
 
-        // Fallback safety timeout (max 3200ms)
-        setTimeout(dismiss, 3200);
+        // Fallback safety timeout (4000ms)
+        setTimeout(dismiss, 4000);
 
         // Instant tap to skip
         const splashEl = document.getElementById('rj-splash-screen');
