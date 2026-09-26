@@ -9,7 +9,7 @@ export interface ProductMetrics {
 // In-memory cache for fast, zero-delay lookups
 const inMemoryMetricsCache = new Map<string, ProductMetrics>();
 let cacheLastFetched = 0;
-const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minute cache to avoid redundant RTDB requests
 
 /**
  * Reads product metrics from in-memory cache if available
@@ -31,10 +31,10 @@ export async function fetchAllProductsMetricsFromRTDB(forceRefresh = false): Pro
 
   try {
     const [ordersSnap, orderItemsSnap, reviewsSnap, vendorReviewsSnap] = await Promise.all([
-      rtdbGet<Record<string, any>>('orders', 1800).catch(() => null),
-      rtdbGet<Record<string, any>>('orderItems', 1800).catch(() => null),
-      rtdbGet<Record<string, any>>('reviews', 1800).catch(() => null),
-      rtdbGet<Record<string, any>>('vendor_reviews', 1800).catch(() => null)
+      rtdbGet<Record<string, any>>('orders', 1200).catch(() => null),
+      rtdbGet<Record<string, any>>('orderItems', 1200).catch(() => null),
+      rtdbGet<Record<string, any>>('reviews', 1200).catch(() => null),
+      rtdbGet<Record<string, any>>('vendor_reviews', 1200).catch(() => null)
     ]);
 
     const salesMap = new Map<string, number>();

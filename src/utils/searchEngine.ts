@@ -185,6 +185,8 @@ export async function searchProductsByImage(
   matchedProducts: Product[];
   detectedItem: string;
   searchQuery: string;
+  similarityScores?: Record<string, number>;
+  uploadedPreview?: string;
 }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -193,7 +195,7 @@ export async function searchProductsByImage(
       try {
         const base64Data = reader.result as string;
 
-        // Call backend Gemini visual search endpoint
+        // Call backend Visual Similarity Search endpoint
         const response = await fetch('/api/search/image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -220,34 +222,39 @@ export async function searchProductsByImage(
         }
 
         const matchedIds: string[] = Array.isArray(data.matchedProductIds) ? data.matchedProductIds : [];
+        const scoreList: Array<{ id: string; similarity: number; matchPercentage: number }> =
+          Array.isArray(data.matchedProductsWithScores) ? data.matchedProductsWithScores : [];
         const detectedItem: string = data.detectedItem || '';
         const suggestedQuery: string = data.searchQuerySuggestion || detectedItem || '';
 
-        // Collect matched products in order
+        const scoresMap: Record<string, number> = {};
+        for (const item of scoreList) {
+          if (item && item.id) {
+            scoresMap[item.id] = item.matchPercentage || Math.round((item.similarity || 0) * 100);
+          }
+        }
+
+        // Collect matched products in strict order of visual similarity
         const matchedMap = new Map(allVendorProducts.map(p => [p.id, p]));
         const matchedList: Product[] = [];
 
         for (const id of matchedIds) {
           const prod = matchedMap.get(id);
           if (prod && !matchedList.some(m => m.id === prod.id)) {
-            matchedList.push(prod);
-          }
-        }
-
-        // Also match against title/keywords suggested by visual AI
-        if (suggestedQuery) {
-          const textMatches = matchProductsDarazStyle(allVendorProducts, suggestedQuery);
-          for (const prod of textMatches) {
-            if (!matchedList.some(m => m.id === prod.id)) {
-              matchedList.push(prod);
-            }
+            const enrichedProd = {
+              ...prod,
+              matchScore: scoresMap[id] || 85
+            } as Product;
+            matchedList.push(enrichedProd);
           }
         }
 
         resolve({
           matchedProducts: matchedList,
           detectedItem,
-          searchQuery: suggestedQuery
+          searchQuery: suggestedQuery,
+          similarityScores: scoresMap,
+          uploadedPreview: base64Data
         });
       } catch (err) {
         console.error('Image search client error:', err);

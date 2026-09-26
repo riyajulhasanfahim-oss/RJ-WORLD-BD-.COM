@@ -2,13 +2,16 @@ import { auth } from '../lib/firebase';
 import { rtdbGet, rtdbSet, rtdbPush, rtdbList } from '../lib/rtdb';
 import { Product } from '../components/ui/ProductCard';
 import { INITIAL_CATEGORIES, INITIAL_BANNERS, INITIAL_COUPONS } from '../lib/firebaseSeed';
-import { fetchAllMarketplaceProducts, fetchProductById, normalizeProduct } from './productService';
+import { fetchAllMarketplaceProducts, fetchProductById, normalizeProduct, getCachedMarketplaceProducts } from './productService';
 import { matchProductsDarazStyle } from '../utils/searchEngine';
 
 // 1. PRODUCTS
 export async function getFirestoreProducts(categorySlug?: string, limitCount = 100): Promise<Product[]> {
   try {
-    const allProducts = await fetchAllMarketplaceProducts();
+    let allProducts = getCachedMarketplaceProducts();
+    if (!allProducts || allProducts.length === 0) {
+      allProducts = await fetchAllMarketplaceProducts();
+    }
     if (!allProducts || allProducts.length === 0) {
       return [];
     }
@@ -37,7 +40,10 @@ export async function getFirestoreProductById(productId: string): Promise<any | 
 
 export async function searchFirestoreProducts(searchQuery: string): Promise<Product[]> {
   try {
-    const allProducts = await fetchAllMarketplaceProducts();
+    let allProducts = getCachedMarketplaceProducts();
+    if (!allProducts || allProducts.length === 0) {
+      allProducts = await fetchAllMarketplaceProducts();
+    }
     if (!searchQuery || !searchQuery.trim()) return allProducts;
 
     return matchProductsDarazStyle(allProducts, searchQuery);

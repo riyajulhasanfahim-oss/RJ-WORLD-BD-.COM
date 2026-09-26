@@ -219,8 +219,9 @@ function ensureGlobalRTDBListener(): void {
 export async function fetchAllMarketplaceProducts(forceRefresh = false): Promise<Product[]> {
   ensureGlobalRTDBListener();
 
-  // If in-memory data exists and is reasonably fresh, return immediately (zero latency)
-  if (!forceRefresh && globalMarketplaceProducts !== null && (Date.now() - lastFetchTime) < 5000) {
+  // If in-memory products exist and forceRefresh is false, return instantly (0ms latency)
+  // The real-time WebSocket listener (ensureGlobalRTDBListener) will automatically keep this up to date
+  if (!forceRefresh && globalMarketplaceProducts !== null && globalMarketplaceProducts.length > 0) {
     return [...globalMarketplaceProducts];
   }
 

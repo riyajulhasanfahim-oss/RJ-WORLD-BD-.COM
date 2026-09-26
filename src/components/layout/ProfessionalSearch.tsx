@@ -171,15 +171,21 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
           state: {
             imageSearchMatches: result.matchedProducts,
             detectedItem: result.detectedItem,
-            isImageSearch: true
+            isImageSearch: true,
+            uploadedImagePreview: result.uploadedPreview,
+            similarityScores: result.similarityScores
           }
         });
-      } else if (targetTerm) {
-        toast('সরাসরি মিলে এমন ছবি পাওয়া যায়নি, নাম দিয়ে অনুসন্ধান করা হচ্ছে...', { icon: '🔍' });
-        navigate(`/category/all?q=${encodeURIComponent(targetTerm)}`);
       } else {
         toast.error('দুঃখিত, এই ছবির সাথে মিল থাকা কোনো পণ্য পাওয়া যায়নি।');
-        navigate(`/category/all?q=${encodeURIComponent(file.name.replace(/\.[^/.]+$/, ''))}`);
+        navigate(`/category/all?q=${encodeURIComponent(targetTerm || 'image-search')}`, {
+          state: {
+            imageSearchMatches: [],
+            detectedItem: result.detectedItem || file.name,
+            isImageSearch: true,
+            uploadedImagePreview: result.uploadedPreview
+          }
+        });
       }
     } catch (err) {
       console.error('Visual image search error:', err);

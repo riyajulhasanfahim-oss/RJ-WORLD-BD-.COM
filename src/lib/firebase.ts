@@ -44,7 +44,7 @@ try {
 
 export const db = firestoreInstance;
 export const storage = getStorage(app);
-export const rtdb = getDatabase(app);
+export const rtdb = getDatabase(app, firebaseConfig.databaseURL);
 export const RTDB_BASE_URL = (firebaseConfig.databaseURL ? firebaseConfig.databaseURL.replace(/\/$/, '') : `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com`);
 
 let analytics: any = null;

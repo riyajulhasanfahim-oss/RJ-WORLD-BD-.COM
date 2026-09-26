@@ -33,7 +33,7 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 const memoryCache = new Map<string, CacheEntry<any>>();
-const CACHE_TTL_MS = 2500; // 2.5s memory cache for blazing fast navigation
+const CACHE_TTL_MS = 30000; // 30s high-speed memory cache (invalidated on any mutation)
 
 /**
  * Invalidates cache for a specific path or prefix
@@ -51,10 +51,15 @@ export function invalidateRtdbCache(path?: string): void {
   }
 }
 
+interface FetchResult<T> {
+  ok: boolean;
+  data: T | null;
+}
+
 /**
  * Executes a fast REST fetch to Firebase RTDB with timeout protection
  */
-async function fetchRtdbRest<T>(cleanPath: string, timeoutMs: number): Promise<T | null> {
+async function fetchRtdbRest<T>(cleanPath: string, timeoutMs: number): Promise<FetchResult<T>> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -68,40 +73,40 @@ async function fetchRtdbRest<T>(cleanPath: string, timeoutMs: number): Promise<T
     clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
-      return (data !== null && data !== undefined) ? (data as T) : null;
+      return { ok: true, data: (data !== null && data !== undefined) ? (data as T) : null };
     }
   } catch (_) {
     // Network abort or offline
   }
-  return null;
+  return { ok: false, data: null };
 }
 
 /**
  * Executes an SDK get() with timeout protection
  */
-async function fetchRtdbSdk<T>(cleanPath: string, timeoutMs: number): Promise<T | null> {
+async function fetchRtdbSdk<T>(cleanPath: string, timeoutMs: number): Promise<FetchResult<T>> {
   try {
     const dbRef = ref(rtdb, cleanPath);
-    const timeoutPromise = new Promise<null>((resolve) => 
-      setTimeout(() => resolve(null), timeoutMs)
+    const timeoutPromise = new Promise<FetchResult<T>>((resolve) => 
+      setTimeout(() => resolve({ ok: false, data: null }), timeoutMs)
     );
     const getPromise = get(dbRef).then(snap => {
       if (snap && snap.exists()) {
-        return snap.val() as T;
+        return { ok: true, data: snap.val() as T };
       }
-      return null;
-    }).catch(() => null);
+      return { ok: true, data: null };
+    }).catch(() => ({ ok: false, data: null }));
 
     return await Promise.race([getPromise, timeoutPromise]);
   } catch (_) {
-    return null;
+    return { ok: false, data: null };
   }
 }
 
 /**
  * Reads a document/node from Firebase Realtime Database with high-speed race & deduplication
  */
-export async function rtdbGet<T = any>(path: string, timeoutMs: number = 3000): Promise<T | null> {
+export async function rtdbGet<T = any>(path: string, timeoutMs: number = 2000): Promise<T | null> {
   const cleanPath = sanitizePath(path);
   if (!cleanPath) return null;
 
@@ -117,25 +122,22 @@ export async function rtdbGet<T = any>(path: string, timeoutMs: number = 3000): 
     return (await inflight) as T | null;
   }
 
-  // 3. Create execution promise racing SDK and fast REST
+  // 3. Create execution promise racing fast REST and SDK
   const execPromise = (async (): Promise<T | null> => {
     try {
-      // Race: Start both SDK and REST in parallel.
-      // REST typically responds in 100-250ms via direct HTTPS.
-      // SDK may respond instantly from internal memory or WebSocket.
-      const sdkCall = fetchRtdbSdk<T>(cleanPath, timeoutMs);
       const restCall = fetchRtdbRest<T>(cleanPath, timeoutMs);
+      const sdkCall = fetchRtdbSdk<T>(cleanPath, timeoutMs);
 
-      // Whichever returns a non-null result first wins
+      // Whichever authoritative source completes successfully first wins (0ms delay for empty nodes!)
       const result = await new Promise<T | null>((resolve) => {
         let settled = 0;
         let hasResolved = false;
 
-        const handleSuccess = (val: T | null) => {
+        const handleSuccess = (res: FetchResult<T>) => {
           if (hasResolved) return;
-          if (val !== null && val !== undefined) {
+          if (res && res.ok) {
             hasResolved = true;
-            resolve(val);
+            resolve(res.data);
           } else {
             settled++;
             if (settled >= 2) {
@@ -145,8 +147,8 @@ export async function rtdbGet<T = any>(path: string, timeoutMs: number = 3000): 
           }
         };
 
-        sdkCall.then(handleSuccess).catch(() => handleSuccess(null));
-        restCall.then(handleSuccess).catch(() => handleSuccess(null));
+        restCall.then(handleSuccess).catch(() => handleSuccess({ ok: false, data: null }));
+        sdkCall.then(handleSuccess).catch(() => handleSuccess({ ok: false, data: null }));
 
         // Hard safety timeout
         setTimeout(() => {
@@ -154,7 +156,7 @@ export async function rtdbGet<T = any>(path: string, timeoutMs: number = 3000): 
             hasResolved = true;
             resolve(null);
           }
-        }, timeoutMs + 200);
+        }, timeoutMs + 100);
       });
 
       if (result !== null && result !== undefined) {

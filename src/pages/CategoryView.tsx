@@ -119,7 +119,7 @@ export default function CategoryView() {
   // Search Results using Daraz-style title and multi-vendor matching (Zero Clutter)
   const searchResults = useMemo(() => {
     if (!isSearchMode) return [];
-    if (isImageSearch && imageSearchMatches.length > 0) {
+    if (isImageSearch) {
       return imageSearchMatches;
     }
     const q = searchQuery.trim() || initialQuery.trim();
@@ -678,6 +678,13 @@ export default function CategoryView() {
                   <span>হোম</span>
                 </Link>
                 <div className="h-4 w-px bg-slate-200 shrink-0" />
+                {isImageSearch && location.state?.uploadedImagePreview && (
+                  <img
+                    src={location.state.uploadedImagePreview}
+                    alt="Uploaded search"
+                    className="w-8 h-8 rounded-lg object-cover border border-slate-200 shadow-2xs shrink-0"
+                  />
+                )}
                 <div className="min-w-0">
                   <h1 className="text-xs sm:text-base font-black text-slate-900 truncate">
                     {isImageSearch ? '📷 ছবির সাথে মিল থাকা পণ্যসমূহ' : `"${searchQuery || initialQuery}"`}
@@ -750,9 +757,11 @@ export default function CategoryView() {
                   কোনো পণ্য খুঁজে পাওয়া যায়নি
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mb-6 leading-relaxed">
-                  {searchQuery || initialQuery
-                    ? `"${searchQuery || initialQuery}" এর সাথে মিলে এমন কোনো পণ্য আমাদের ভেন্ডারদের তালিকায় পাওয়া যায়নি।`
-                    : 'আপনার অনুসন্ধানের সাথে মিলে এমন কোনো পণ্য পাওয়া যায়নি।'}
+                  {isImageSearch
+                    ? 'আপলোড করা ছবির সাথে মিল থাকা কোনো পণ্য আমাদের ভেন্ডারদের তালিকায় পাওয়া যায়নি। অন্য কোনো স্পষ্ট ছবি বা প্রোডাক্টের নাম লিখে অনুসন্ধান করুন।'
+                    : searchQuery || initialQuery
+                      ? `"${searchQuery || initialQuery}" এর সাথে মিলে এমন কোনো পণ্য আমাদের ভেন্ডারদের তালিকায় পাওয়া যায়নি।`
+                      : 'আপনার অনুসন্ধানের সাথে মিলে এমন কোনো পণ্য পাওয়া যায়নি।'}
                 </p>
                 <div className="flex items-center justify-center gap-3">
                   <button
