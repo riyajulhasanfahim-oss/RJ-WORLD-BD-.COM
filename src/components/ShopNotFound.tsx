@@ -13,7 +13,7 @@ export default function ShopNotFound() {
           The shop you are looking for does not exist or has been removed.
         </p>
         <a
-          href="https://rjworld.com"
+          href="https://rjworldbd.com"
           className="inline-flex items-center gap-2 px-6 py-3 bg-primary-main text-white font-medium rounded-lg hover:bg-sky-600 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />

@@ -40,19 +40,15 @@ import { useAuth } from '../context/AuthContext';
 import { INITIAL_CATEGORIES } from '../lib/firebaseSeed';
 import { MAIN_CATEGORIES, isCategoryMatching } from '../constants/categories';
 import { fetchAllMarketplaceProducts, subscribeToMarketplaceProducts, getCachedMarketplaceProducts } from '../services/productService';
+import { matchProductsDarazStyle } from '../utils/searchEngine';
 import toast from 'react-hot-toast';
 
 function filterProductsForCategory(all: Product[], catId?: string, query?: string): Product[] {
-  let list = all;
   if (query && query.trim()) {
-    const term = query.toLowerCase().trim();
-    list = list.filter(p => 
-      p.name?.toLowerCase().includes(term) ||
-      p.category?.toLowerCase().includes(term) ||
-      p.brand?.toLowerCase().includes(term) ||
-      (p.vendor && (p.vendor.storeName?.toLowerCase().includes(term) || p.vendor.name?.toLowerCase().includes(term)))
-    );
-  } else if (catId && catId !== 'all') {
+    return matchProductsDarazStyle(all, query);
+  }
+  let list = all;
+  if (catId && catId !== 'all') {
     list = list.filter(p => isCategoryMatching(p.category || p.categorySlug, catId));
   }
   return list;
@@ -85,10 +81,19 @@ export default function CategoryView() {
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { userData } = useAuth();
 
+  // Filters State
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const isImageSearch = Boolean(location.state?.isImageSearch);
+  const imageSearchMatches = (location.state?.imageSearchMatches as Product[]) || [];
+  const isSearchMode = Boolean((searchQuery || initialQuery).trim() || isImageSearch);
+
   // Core Data State
   const [products, setProducts] = useState<Product[]>(() => {
     const cached = getCachedMarketplaceProducts();
     return filterProductsForCategory(cached, categoryId, initialQuery);
+  });
+  const [allMarketplaceProducts, setAllMarketplaceProducts] = useState<Product[]>(() => {
+    return getCachedMarketplaceProducts();
   });
   const [allCategories, setAllCategories] = useState<any[]>(MAIN_CATEGORIES);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>(() => {
@@ -97,8 +102,6 @@ export default function CategoryView() {
   });
   const [loading, setLoading] = useState<boolean>(() => products.length === 0);
 
-  // Filters State
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryId);
   const [priceRange, setPriceRange] = useState<{ min: string; max: string }>({ min: '', max: '' });
   const [minRating, setMinRating] = useState<number>(0);
@@ -112,6 +115,36 @@ export default function CategoryView() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  // Search Results using Daraz-style title and multi-vendor matching (Zero Clutter)
+  const searchResults = useMemo(() => {
+    if (!isSearchMode) return [];
+    if (isImageSearch && imageSearchMatches.length > 0) {
+      return imageSearchMatches;
+    }
+    const q = searchQuery.trim() || initialQuery.trim();
+    if (!q) return [];
+    return matchProductsDarazStyle(allMarketplaceProducts, q);
+  }, [isSearchMode, isImageSearch, imageSearchMatches, searchQuery, initialQuery, allMarketplaceProducts]);
+
+  const [searchPage, setSearchPage] = useState(1);
+  const searchItemsPerPage = 20;
+  const searchTotalPages = Math.ceil(searchResults.length / searchItemsPerPage);
+  const currentSearchItems = useMemo(() => {
+    return searchResults.slice(
+      (searchPage - 1) * searchItemsPerPage,
+      searchPage * searchItemsPerPage
+    );
+  }, [searchResults, searchPage, searchItemsPerPage]);
+
+  useEffect(() => {
+    setSearchPage(1);
+  }, [searchQuery, initialQuery]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    navigate('/category/all', { replace: true });
+  }, [navigate]);
 
   // Mobile Filter Drawer State
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
@@ -156,6 +189,7 @@ export default function CategoryView() {
 
     const handleProductsList = (all: Product[]) => {
       if (!isMounted) return;
+      setAllMarketplaceProducts(all);
       const filtered = filterProductsForCategory(all, categoryId, initialQuery);
       setProducts(filtered);
       setRecommendedProducts(all.slice(0, 8));
@@ -626,117 +660,244 @@ export default function CategoryView() {
 
       <main className="flex-grow max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-20 sm:pb-24">
         
-        {/* Top Navigation & Breadcrumbs */}
-        <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
-          <div className="flex items-center gap-2 min-w-0">
-            <Link
-              to="/"
-              id="category-back-btn"
-              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 rounded-lg sm:rounded-xl bg-white hover:bg-sky-50 border border-slate-200 hover:border-primary-main/40 text-slate-700 hover:text-primary-main text-xs font-semibold shadow-2xs transition-all shrink-0"
-              title="হোম পেজে ফিরে যান"
-            >
-              <ArrowLeft className="w-4 h-4 text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
-              <span className="text-[11px] sm:text-xs">হোম</span>
-            </Link>
-
-            <div className="h-4 w-px bg-slate-200 shrink-0" />
-
-            <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5 overflow-x-auto whitespace-nowrap hide-scrollbar">
-              <Link to="/" className="hover:text-primary-main transition-colors">Home</Link>
-              <span>/</span>
-              <Link to="/category/all" className="hover:text-primary-main transition-colors">Products</Link>
-              {searchQuery ? (
-                <>
-                  <span>/</span>
-                  <span className="text-slate-800 font-semibold truncate max-w-[120px] sm:max-w-[200px]">
-                    Search: "{searchQuery}"
-                  </span>
-                </>
-              ) : selectedCategory !== 'all' ? (
-                <>
-                  <span>/</span>
-                  <span className="text-slate-800 font-semibold capitalize">
-                    {selectedCategory.replace(/-/g, ' ')}
-                  </span>
-                </>
-              ) : null}
-            </nav>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs font-semibold text-slate-700">
-              <ShoppingBag className="w-3.5 h-3.5 text-primary-main" />
-              {filteredAndSortedProducts.length} টি পণ্য
-            </span>
-          </div>
-        </div>
-
-        {/* Page Banner / Header Card */}
-        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200/80 shadow-xs mb-4 sm:mb-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {pageTitle}
-                </h1>
-                <span className="text-xs font-bold text-primary-main bg-sky-50 border border-sky-200/80 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
-                  {filteredAndSortedProducts.length} টি ফলাফল
-                </span>
+        {isSearchMode ? (
+          /* ========================================================= */
+          /* PURE CLEAN SEARCH RESULTS VIEW (DARAZ STYLE)             */
+          /* Completely Free of Breadcrumb, Categories & Filter Clutter */
+          /* ========================================================= */
+          <div className="w-full">
+            {/* Clean Minimalist Search Status Bar */}
+            <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6 bg-white p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <Link
+                  to="/"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shrink-0 cursor-pointer"
+                  title="হোম পেজে ফিরে যান"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-600" />
+                  <span>হোম</span>
+                </Link>
+                <div className="h-4 w-px bg-slate-200 shrink-0" />
+                <div className="min-w-0">
+                  <h1 className="text-xs sm:text-base font-black text-slate-900 truncate">
+                    {isImageSearch ? '📷 ছবির সাথে মিল থাকা পণ্যসমূহ' : `"${searchQuery || initialQuery}"`}
+                  </h1>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    {loading
+                      ? 'পণ্য অনুসন্ধান করা হচ্ছে...'
+                      : searchResults.length > 0
+                        ? `${searchResults.length} টি পণ্য পাওয়া গেছে`
+                        : 'কোনো পণ্য পাওয়া যায়নি'}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                {searchQuery
-                  ? `"${searchQuery}" কি-ওয়ার্ড দিয়ে খুঁজে পাওয়া সকল পণ্যসমূহ নিচে প্রদর্শিত হচ্ছে`
-                  : 'প্রয়োজনীয় পণ্য সহজে খুঁজে পেতে ফিল্টার বা সর্ট অপশন ব্যবহার করুন'}
-              </p>
+
+              <button
+                onClick={handleClearSearch}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 border border-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0"
+              >
+                <span>সকল পণ্য</span>
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* If there is a search term, show clear search pill */}
-            {searchQuery && (
-              <div className="flex items-center gap-2">
+            {/* Product Grid - Full Width without Sidebar or Filter clutter */}
+            {loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-4">
+                {Array.from({ length: 10 }).map((_, idx) => (
+                  <div key={idx} className="bg-white rounded-2xl border border-slate-200 p-3 animate-pulse">
+                    <div className="aspect-square bg-slate-200 rounded-xl mb-3" />
+                    <div className="h-4 bg-slate-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-slate-100 rounded w-1/2 mb-3" />
+                    <div className="h-5 bg-slate-200 rounded w-1/3 mb-2" />
+                    <div className="h-8 bg-slate-100 rounded-lg w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : currentSearchItems.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-4 mb-8">
+                {currentSearchItems.map((product) => (
+                  <CategoryProductCard
+                    key={product.id}
+                    product={product}
+                    isInWishlist={isInWishlist(product.id)}
+                    onWishlistToggle={(e) => handleWishlistClick(e, product)}
+                    onAddToCart={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      addToCart({
+                        id: product.id,
+                        name: product.name,
+                        price: Number(product.price) || 0,
+                        originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+                        image: product.featuredImage || product.image || (product.images && product.images[0]) || '',
+                        quantity: 1,
+                        vendorId: product.vendorId
+                      });
+                      toast.success(`${product.name} কার্টে যোগ হয়েছে`);
+                    }}
+                    onBuyNow={(e) => handleBuyNow(e, product)}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Clean Minimalist Empty State */
+              <div className="bg-white rounded-2xl md:rounded-3xl p-8 sm:p-14 text-center border border-slate-200/90 shadow-xs mb-8 max-w-xl mx-auto">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-amber-100 shadow-2xs">
+                  <Search className="w-8 h-8 sm:w-10 sm:h-10" />
+                </div>
+                <h3 className="text-base sm:text-xl font-black text-slate-900 mb-2">
+                  কোনো পণ্য খুঁজে পাওয়া যায়নি
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mb-6 leading-relaxed">
+                  {searchQuery || initialQuery
+                    ? `"${searchQuery || initialQuery}" এর সাথে মিলে এমন কোনো পণ্য আমাদের ভেন্ডারদের তালিকায় পাওয়া যায়নি।`
+                    : 'আপনার অনুসন্ধানের সাথে মিলে এমন কোনো পণ্য পাওয়া যায়নি।'}
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={handleClearSearch}
+                    className="px-5 py-2.5 bg-primary-main hover:bg-sky-600 active:scale-95 text-white font-bold rounded-xl text-xs sm:text-sm shadow-2xs transition-all cursor-pointer"
+                  >
+                    সকল পণ্য ব্রাউজ করুন
+                  </button>
+                  <Link
+                    to="/"
+                    className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs sm:text-sm transition-colors"
+                  >
+                    হোমে ফিরে যান
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Clean Search Pagination */}
+            {searchTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-1.5 py-4">
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 border border-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                  onClick={() => { setSearchPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  disabled={searchPage === 1}
+                  className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
                 >
-                  <span>সার্চ মুছুন</span>
-                  <X className="w-3.5 h-3.5" />
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: searchTotalPages }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setSearchPage(i + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${
+                      searchPage === i + 1
+                        ? 'bg-primary-main text-white shadow-2xs'
+                        : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setSearchPage(p => Math.min(searchTotalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  disabled={searchPage === searchTotalPages}
+                  className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             )}
           </div>
+        ) : (
+          /* ========================================================= */
+          /* REGULAR CATEGORY VIEW (FOR BROWSING CATEGORIES)           */
+          /* ========================================================= */
+          <>
+            {/* Top Navigation & Breadcrumbs */}
+            <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <Link
+                  to="/"
+                  id="category-back-btn"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 rounded-lg sm:rounded-xl bg-white hover:bg-sky-50 border border-slate-200 hover:border-primary-main/40 text-slate-700 hover:text-primary-main text-xs font-semibold shadow-2xs transition-all shrink-0"
+                  title="হোম পেজে ফিরে যান"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
+                  <span className="text-[11px] sm:text-xs">হোম</span>
+                </Link>
 
-          {/* Quick Category Chips bar (Horizontal Scrolling) */}
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1 hidden sm:inline">
-              ক্যাটাগরি:
-            </span>
-            <button
-              onClick={() => handleCategorySelect('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                selectedCategory === 'all'
-                  ? 'bg-primary-main text-white shadow-2xs'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
-            >
-              সবগুলো
-            </button>
-            {allCategories.map(cat => {
-              const isSelected = selectedCategory === (cat.path || cat.id);
-              return (
+                <div className="h-4 w-px bg-slate-200 shrink-0" />
+
+                <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5 overflow-x-auto whitespace-nowrap hide-scrollbar">
+                  <Link to="/" className="hover:text-primary-main transition-colors">Home</Link>
+                  <span>/</span>
+                  <Link to="/category/all" className="hover:text-primary-main transition-colors">Products</Link>
+                  {selectedCategory !== 'all' ? (
+                    <>
+                      <span>/</span>
+                      <span className="text-slate-800 font-semibold capitalize">
+                        {selectedCategory.replace(/-/g, ' ')}
+                      </span>
+                    </>
+                  ) : null}
+                </nav>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs font-semibold text-slate-700">
+                  <ShoppingBag className="w-3.5 h-3.5 text-primary-main" />
+                  {filteredAndSortedProducts.length} টি পণ্য
+                </span>
+              </div>
+            </div>
+
+            {/* Page Banner / Header Card */}
+            <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200/80 shadow-xs mb-4 sm:mb-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                      {pageTitle}
+                    </h1>
+                    <span className="text-xs font-bold text-primary-main bg-sky-50 border border-sky-200/80 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                      {filteredAndSortedProducts.length} টি ফলাফল
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    প্রয়োজনীয় পণ্য সহজে খুঁজে পেতে ফিল্টার বা সর্ট অপশন ব্যবহার করুন
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Category Chips bar (Horizontal Scrolling) */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1 hidden sm:inline">
+                  ক্যাটাগরি:
+                </span>
                 <button
-                  key={cat.id}
-                  onClick={() => handleCategorySelect(cat.path || cat.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary-main text-white shadow-2xs font-bold'
+                  onClick={() => handleCategorySelect('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                    selectedCategory === 'all'
+                      ? 'bg-primary-main text-white shadow-2xs'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   }`}
                 >
-                  {cat.name}
+                  সবগুলো
                 </button>
-              );
-            })}
-          </div>
-        </div>
+                {allCategories.map(cat => {
+                  const isSelected = selectedCategory === (cat.path || cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => handleCategorySelect(cat.path || cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'bg-primary-main text-white shadow-2xs font-bold'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
         {/* Main Section: Left Sidebar + Product Grid */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -1142,12 +1303,14 @@ export default function CategoryView() {
 
           </div>
         </div>
+        </>
+      )}
 
       </main>
 
-      {/* Mobile Filter Drawer / Slide-Over */}
+      {/* Mobile Filter Drawer / Slide-Over - Only active when not in search mode */}
       <AnimatePresence>
-        {isMobileFilterOpen && (
+        {isMobileFilterOpen && !isSearchMode && (
           <>
             <motion.div
               initial={{ opacity: 0 }}

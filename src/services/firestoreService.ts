@@ -3,6 +3,7 @@ import { rtdbGet, rtdbSet, rtdbPush, rtdbList } from '../lib/rtdb';
 import { Product } from '../components/ui/ProductCard';
 import { INITIAL_CATEGORIES, INITIAL_BANNERS, INITIAL_COUPONS } from '../lib/firebaseSeed';
 import { fetchAllMarketplaceProducts, fetchProductById, normalizeProduct } from './productService';
+import { matchProductsDarazStyle } from '../utils/searchEngine';
 
 // 1. PRODUCTS
 export async function getFirestoreProducts(categorySlug?: string, limitCount = 100): Promise<Product[]> {
@@ -37,15 +38,9 @@ export async function getFirestoreProductById(productId: string): Promise<any | 
 export async function searchFirestoreProducts(searchQuery: string): Promise<Product[]> {
   try {
     const allProducts = await fetchAllMarketplaceProducts();
-    const term = searchQuery.toLowerCase().trim();
-    if (!term) return allProducts;
+    if (!searchQuery || !searchQuery.trim()) return allProducts;
 
-    return allProducts.filter(p => 
-      p.name?.toLowerCase().includes(term) ||
-      p.category?.toLowerCase().includes(term) ||
-      p.brand?.toLowerCase().includes(term) ||
-      (p.vendor && (p.vendor.storeName?.toLowerCase().includes(term) || p.vendor.name?.toLowerCase().includes(term)))
-    );
+    return matchProductsDarazStyle(allProducts, searchQuery);
   } catch (error) {
     console.warn('Error searching marketplace products:', error);
     return [];

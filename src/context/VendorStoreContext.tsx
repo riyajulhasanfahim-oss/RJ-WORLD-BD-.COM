@@ -2,6 +2,11 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { useAuth } from './AuthContext';
 import { rtdbGet, rtdbUpdate, rtdbSet, rtdbSubscribe } from '../lib/rtdb';
 import { RTDB_BASE_URL } from '../lib/firebase';
+import { 
+  getVendorSubdomain, 
+  slugifyVendorName, 
+  PRIMARY_DOMAIN 
+} from '../utils/subdomain';
 
 export interface VendorStoreData {
   storeId?: string;
@@ -326,6 +331,20 @@ export const VendorStoreProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       // Merge on top of previous state ensuring no valid fields disappear
       const finalData = mergeVendorData(combined, latestVendorInfoRef.current);
+
+      // Ensure freeShopDomain is correctly formatted to rjworldbd.com
+      if (finalData) {
+        const currentDom = (finalData.freeShopDomain || '').toLowerCase().trim();
+        if (!currentDom || !currentDom.endsWith(`.${PRIMARY_DOMAIN}`) || currentDom.endsWith('.rjworld.com')) {
+          const rawName = finalData.shopSlug || finalData.storeSlug || finalData.shopName || finalData.storeName || '';
+          if (rawName) {
+            const derivedSlug = slugifyVendorName(rawName);
+            finalData.freeShopDomain = getVendorSubdomain(derivedSlug);
+            finalData.shopSlug = finalData.shopSlug || derivedSlug;
+            finalData.storeSlug = finalData.storeSlug || derivedSlug;
+          }
+        }
+      }
       
       // Update state and save to cache
       setVendorInfo(finalData);

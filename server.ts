@@ -25,6 +25,7 @@ import {
   updateOrderCourierStatusInRtdb,
   type ApprovedCourier
 } from './server/courierVerificationService';
+import { analyzeImageForProductMatch } from './server/visualSearchService';
 
 // Initialize Firebase Admin safely
 try {
@@ -213,6 +214,38 @@ async function startServer() {
       return res.status(500).json({
         error: 'Failed to generate AI reply',
         reply: 'দুঃখিত, সংযোগে সামান্য বিলম্ব হচ্ছে। আমাদের টিম লাইভ আছেন, শীঘ্রই আপনাকে সহায়তা করা হচ্ছে।'
+      });
+    }
+  });
+
+  // Visual Image Search API using Gemini AI to match products across all vendors
+  app.post('/api/search/image', async (req, res) => {
+    try {
+      const { base64Image, mimeType, fileName, vendorProducts } = req.body;
+      if (!base64Image) {
+        return res.status(400).json({ success: false, error: 'base64Image is required' });
+      }
+
+      const searchResult = await analyzeImageForProductMatch({
+        base64Image,
+        mimeType: mimeType || 'image/jpeg',
+        fileName: fileName || '',
+        vendorProducts: Array.isArray(vendorProducts) ? vendorProducts : []
+      });
+
+      return res.json({
+        success: true,
+        ...searchResult
+      });
+    } catch (err: any) {
+      console.error('Error in /api/search/image:', err);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to process visual search',
+        matchedProductIds: [],
+        detectedItem: '',
+        confidenceKeywords: [],
+        searchQuerySuggestion: ''
       });
     }
   });
@@ -2560,6 +2593,18 @@ async function startServer() {
     app.get('*', (req, res) => {
       const indexPath = path.join(distPath, 'index.html');
       if (fs.existsSync(indexPath)) {
+        const rawHost = (req.get('x-forwarded-host') || req.get('host') || '').toLowerCase().split(':')[0];
+        let sub = '';
+        if (rawHost.endsWith('.rjworldbd.com') && rawHost !== 'rjworldbd.com' && rawHost !== 'www.rjworldbd.com') {
+          sub = rawHost.replace('.rjworldbd.com', '').trim();
+        }
+        const reserved = ['www', 'admin', 'api', 'mail', 'cpanel', 'webmail', 'ftp', 'app', 'auth', 'support'];
+        if (sub && !reserved.includes(sub)) {
+          let html = fs.readFileSync(indexPath, 'utf-8');
+          html = html.replace('<head>', `<head><script>window.__RJ_VENDOR_SUBDOMAIN__="${sub}";</script>`);
+          res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+          return res.send(html);
+        }
         res.sendFile(indexPath);
       } else {
         res.status(200).send('RJ WORLD BD Server Running');

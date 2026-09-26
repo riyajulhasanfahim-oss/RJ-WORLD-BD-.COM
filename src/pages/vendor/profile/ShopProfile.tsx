@@ -14,6 +14,14 @@ import {
 import toast from 'react-hot-toast';
 import { BANGLADESH_DISTRICTS } from '../../../data/bangladeshDistricts';
 import { getDivisionByDistrict, extractVendorLocation } from '../../../utils/deliveryCalculator';
+import {
+  generateUniqueVendorSlug,
+  getVendorSubdomain,
+  getVendorStoreUrl,
+  getVendorOpenUrl,
+  slugifyVendorName,
+  PRIMARY_DOMAIN
+} from '../../../utils/subdomain';
 
 // Helper to remove any undefined fields before sending to Realtime Database
 function cleanObject(obj: any): any {
@@ -352,46 +360,32 @@ export default function ShopProfile() {
   };
 
   const generateSlug = async (name: string) => {
-    const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || 'store';
-    let uniqueSlug = baseSlug;
-    let counter = 1;
-    let isUnique = false;
-    
-    // Read all profiles from Realtime Database
-    const allProfiles = await rtdbGet<Record<string, any>>('vendor_profiles') || {};
-
-    while (!isUnique) {
-      const hasConflict = Object.entries(allProfiles).some(([uid, p]) => {
-        if (uid === user?.uid) return false;
-        return p?.shopSlug === uniqueSlug || p?.storeSlug === uniqueSlug;
-      });
-
-      if (!hasConflict) {
-        isUnique = true;
-      } else {
-        uniqueSlug = `${baseSlug}-${counter}`;
-        counter++;
-      }
-    }
-    return uniqueSlug;
+    return await generateUniqueVendorSlug(name, user?.uid);
   };
 
   const handleGenerateFreeDomain = async () => {
-    if (!profile.shopName) {
+    const rawName = (profile.shopName || profile.storeName || '').trim();
+    if (!rawName) {
       toast.error('Please enter a Shop Name in Basic Profile first');
       return;
     }
     setVerifyingDomain(true);
     try {
-      const slug = await generateSlug(profile.shopName);
-      const freeDomain = `${slug}.rjworldbd.com`;
-      const newProfile = { ...profile, shopSlug: slug, freeShopDomain: freeDomain, updatedAt: Date.now() };
+      const slug = await generateUniqueVendorSlug(rawName, user?.uid);
+      const freeDomain = `${slug}.${PRIMARY_DOMAIN}`;
+      const newProfile = { 
+        ...profile, 
+        shopSlug: slug, 
+        storeSlug: slug, 
+        freeShopDomain: freeDomain, 
+        updatedAt: Date.now() 
+      };
       setProfile(newProfile);
       if (user) {
         await Promise.all([
-          rtdbUpdate(`vendor_profiles/${user.uid}`, { shopSlug: slug, freeShopDomain: freeDomain, updatedAt: Date.now() }),
-          rtdbUpdate(`vendors/${user.uid}`, { shopSlug: slug, freeShopDomain: freeDomain, updatedAt: Date.now() }),
-          rtdbUpdate(`stores/${user.uid}`, { shopSlug: slug, freeShopDomain: freeDomain, updatedAt: Date.now() })
+          rtdbUpdate(`vendor_profiles/${user.uid}`, { shopSlug: slug, storeSlug: slug, freeShopDomain: freeDomain, updatedAt: Date.now() }),
+          rtdbUpdate(`vendors/${user.uid}`, { shopSlug: slug, storeSlug: slug, freeShopDomain: freeDomain, updatedAt: Date.now() }),
+          rtdbUpdate(`stores/${user.uid}`, { shopSlug: slug, storeSlug: slug, freeShopDomain: freeDomain, updatedAt: Date.now() })
         ]);
         try {
           localStorage.setItem('rj_vendor_profile_' + user.uid, JSON.stringify(newProfile));
@@ -487,6 +481,21 @@ export default function ShopProfile() {
       const now = Date.now();
       const shopTitle = (profile.shopName || profile.storeName || '').trim();
 
+      // Ensure a valid unique subdomain is automatically generated if missing or outdated
+      let finalSlug = (profile.shopSlug || profile.storeSlug || '').trim();
+      let finalFreeDomain = (profile.freeShopDomain || '').trim();
+      if (
+        !finalFreeDomain || 
+        !finalSlug || 
+        finalFreeDomain.endsWith('.rjworld.com') || 
+        !finalFreeDomain.endsWith(`.${PRIMARY_DOMAIN}`)
+      ) {
+        if (shopTitle) {
+          finalSlug = await generateUniqueVendorSlug(shopTitle, user.uid);
+          finalFreeDomain = `${finalSlug}.${PRIMARY_DOMAIN}`;
+        }
+      }
+
       const selectedDistrict = (profile.address?.district || profile.address?.state || '').trim();
       const selectedUpazila = (profile.address?.upazila || profile.address?.city || '').trim();
       const selectedDivision = (profile.address?.division || (selectedDistrict ? getDivisionByDistrict(selectedDistrict) : '')).trim();
@@ -572,8 +581,9 @@ export default function ShopProfile() {
         openingHours: profile.openingHours || 'Mon-Fri: 9 AM - 6 PM',
         category: profile.category || 'Retail',
         status: profile.status || 'Active',
-        shopSlug: profile.shopSlug || '',
-        freeShopDomain: profile.freeShopDomain || '',
+        shopSlug: finalSlug || profile.shopSlug || '',
+        storeSlug: finalSlug || profile.storeSlug || '',
+        freeShopDomain: finalFreeDomain || profile.freeShopDomain || '',
         customDomain: profile.customDomain || '',
         customDomainStatus: profile.customDomainStatus || 'Pending',
         verificationStatus: profile.verificationStatus || vendorInfo?.verificationStatus || 'Pending',
@@ -1182,8 +1192,8 @@ export default function ShopProfile() {
                       <input
                         type="text"
                         readOnly
-                        value={profile.freeShopDomain ? `https://${profile.freeShopDomain}` : 'Not generated yet'}
-                        className="bg-transparent flex-grow outline-none text-gray-700 font-medium text-xs sm:text-sm truncate"
+                        value={profile.freeShopDomain ? `https://${profile.freeShopDomain}/` : (profile.shopSlug ? `https://${profile.shopSlug}.${PRIMARY_DOMAIN}/` : 'Not generated yet')}
+                        className="bg-transparent flex-grow outline-none text-gray-700 font-medium text-xs sm:text-sm truncate select-all"
                       />
                     </div>
                   </div>
@@ -1200,7 +1210,14 @@ export default function ShopProfile() {
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     <p className="text-xs text-green-600 font-semibold flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Active: 
-                      <a href={`https://${profile.freeShopDomain}/`} target="_blank" rel="noreferrer" className="underline truncate max-w-[180px]">https://{profile.freeShopDomain}/</a>
+                      <a 
+                        href={getVendorOpenUrl(profile.freeShopDomain, user?.uid)} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="underline truncate max-w-[200px]"
+                      >
+                        https://{profile.freeShopDomain}/
+                      </a>
                     </p>
                     <button
                       type="button"
@@ -1208,15 +1225,15 @@ export default function ShopProfile() {
                         navigator.clipboard.writeText(`https://${profile.freeShopDomain}/`);
                         toast.success('Shop link copied!');
                       }}
-                      className="text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2.5 rounded-lg flex items-center gap-1 transition-colors"
+                      className="text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <Copy className="w-3 h-3" /> Copy
                     </button>
                     <a
-                      href={`https://${profile.freeShopDomain}`}
+                      href={getVendorOpenUrl(profile.freeShopDomain, user?.uid)}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-[11px] font-semibold bg-primary-main hover:bg-sky-600 text-white py-1 px-2.5 rounded-lg flex items-center gap-1 transition-colors"
+                      className="text-[11px] font-semibold bg-primary-main hover:bg-sky-600 text-white py-1 px-2.5 rounded-lg flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
                     >
                       Open
                     </a>

@@ -23,6 +23,7 @@ import {
   Star,
   Receipt
 } from 'lucide-react';
+import { getVendorOpenUrl } from '../../utils/subdomain';
 
 interface VendorLayoutProps {
   children: React.ReactNode;
@@ -208,10 +209,10 @@ export default function VendorLayout({ children }: VendorLayoutProps) {
           <div className="flex items-center gap-2 sm:gap-4">
              <VendorNotificationDropdown />
              <a 
-               href={vendorInfo?.freeShopDomain ? `https://${vendorInfo.freeShopDomain}/` : (userData?.uid ? `/store/${userData.uid}` : '/')}
+               href={vendorInfo?.freeShopDomain ? getVendorOpenUrl(vendorInfo.freeShopDomain, userData?.uid) : (userData?.uid ? `/store/${userData.uid}` : '/')}
                target="_blank"
                rel="noopener noreferrer"
-               className="text-xs sm:text-sm font-medium text-primary-main hover:underline hidden sm:inline-block"
+               className="text-xs sm:text-sm font-medium text-primary-main hover:underline hidden sm:inline-block cursor-pointer"
              >
                View Store
              </a>

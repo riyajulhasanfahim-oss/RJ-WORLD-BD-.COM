@@ -19,6 +19,10 @@ import { verifyPaymentAutomatic, type VerificationResult } from '../../../servic
 import { checkAccountStatus } from '../../../services/accountStatusService';
 import { BANGLADESH_DISTRICTS } from '../../../data/bangladeshDistricts';
 import { getDivisionByDistrict } from '../../../utils/deliveryCalculator';
+import { 
+  generateUniqueVendorSlug, 
+  PRIMARY_DOMAIN 
+} from '../../../utils/subdomain';
 
 export default function VendorRegistration() {
   const { user, userData, logout, refreshUserData } = useAuth();
@@ -309,7 +313,7 @@ export default function VendorRegistration() {
       ]);
 
       if (result.status === 'verified') {
-        const storeSlug = formData.storeName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const storeSlug = await generateUniqueVendorSlug(formData.storeName.trim(), currentUserId);
         const finalDistrict = formData.district.trim();
         const finalUpazila = formData.upazila.trim();
         const finalDivision = formData.division.trim() || getDivisionByDistrict(finalDistrict);
@@ -425,7 +429,7 @@ export default function VendorRegistration() {
           shopName: formData.storeName.trim(),
           storeSlug: storeSlug,
           shopSlug: storeSlug,
-          freeShopDomain: `${storeSlug}.rjworld.com`,
+          freeShopDomain: `${storeSlug}.${PRIMARY_DOMAIN}`,
           description: `Welcome to ${formData.storeName.trim()}`,
           category: 'Retail',
           address: structuredAddress,

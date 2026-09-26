@@ -68,6 +68,11 @@ import { getVendorPlatformFee } from '../../services/platformFeeService';
 import { format } from 'date-fns';
 import { fetchVendorReviews, replyToCustomerReview, ProductReview } from '../../services/reviewService';
 import { calculateResellerLockedProfitFromOrders } from '../../services/vendorResellerOrderService';
+import { 
+  getVendorOpenUrl, 
+  slugifyVendorName, 
+  PRIMARY_DOMAIN 
+} from '../../utils/subdomain';
 import {
   LineChart,
   Line,
@@ -835,43 +840,51 @@ export default function VendorDashboard() {
               </div>
 
               {/* Free Shop Domain & Custom Domain */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs mb-2">
-                {vendorInfo?.freeShopDomain && (
-                  <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
-                    <span className="text-gray-500 font-normal">Domain:</span>
-                    <span className="font-semibold text-primary-main">https://{vendorInfo.freeShopDomain}/</span>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigator.clipboard.writeText(`https://${vendorInfo.freeShopDomain}/`);
-                        toast.success('Shop link copied!');
-                      }}
-                      className="text-gray-500 hover:text-gray-800 ml-1 p-0.5"
-                      title="Copy link"
-                    >
-                      <Copy className="w-3 h-3" />
-                    </button>
-                    <a 
-                      href={`https://${vendorInfo.freeShopDomain}/`} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      className="text-primary-main hover:underline font-medium text-[11px]"
-                    >
-                      Open
-                    </a>
-                  </div>
-                )}
+              {(() => {
+                const activeShopDomain = vendorInfo?.freeShopDomain && vendorInfo.freeShopDomain.endsWith(`.${PRIMARY_DOMAIN}`)
+                  ? vendorInfo.freeShopDomain
+                  : (vendorInfo?.shopSlug ? `${vendorInfo.shopSlug}.${PRIMARY_DOMAIN}` : (vendorInfo?.shopName || vendorInfo?.storeName ? `${slugifyVendorName(vendorInfo.shopName || vendorInfo.storeName)}.${PRIMARY_DOMAIN}` : ''));
+                
+                return (
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs mb-2">
+                    {activeShopDomain && (
+                      <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
+                        <span className="text-gray-500 font-normal">Domain:</span>
+                        <span className="font-semibold text-primary-main">https://{activeShopDomain}/</span>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            navigator.clipboard.writeText(`https://${activeShopDomain}/`);
+                            toast.success('Shop link copied!');
+                          }}
+                          className="text-gray-500 hover:text-gray-800 ml-1 p-0.5 cursor-pointer"
+                          title="Copy link"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                        <a 
+                          href={getVendorOpenUrl(activeShopDomain, user?.uid)} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-primary-main hover:underline font-semibold text-[11px] cursor-pointer"
+                        >
+                          Open
+                        </a>
+                      </div>
+                    )}
 
-                {vendorInfo?.customDomain && (
-                  <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
-                    <span className="text-gray-500">Custom:</span>
-                    <span className="font-semibold text-gray-800">{vendorInfo.customDomain}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${vendorInfo.verificationStatus === 'Verified' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {vendorInfo.verificationStatus || 'Pending'}
-                    </span>
+                    {vendorInfo?.customDomain && (
+                      <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
+                        <span className="text-gray-500">Custom:</span>
+                        <span className="font-semibold text-gray-800">{vendorInfo.customDomain}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${vendorInfo.verificationStatus === 'Verified' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {vendorInfo.verificationStatus || 'Pending'}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Description */}
               {vendorInfo?.description ? (

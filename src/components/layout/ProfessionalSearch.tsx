@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Camera, Mic, Clock, TrendingUp, X, Upload } from 'lucide-react';
+import { Search, Camera, Mic, Clock, TrendingUp, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Product } from '../ui/ProductCard';
 import { searchFirestoreProducts, addSearchHistoryToFirestore } from '../../services/firestoreService';
+import { fetchAllMarketplaceProducts } from '../../services/productService';
+import { searchProductsByImage } from '../../utils/searchEngine';
 import { auth } from '../../lib/firebase';
+import toast from 'react-hot-toast';
 
 const RECENT_SEARCHES = ['Headphones', 'Smart Watch', 'Backpack'];
 const TRENDING_SEARCHES = ['iPhone 15', 'Wireless Earbuds', 'Gaming Mouse', 'Mechanical Keyboard'];
-const POPULAR_CATEGORIES = ['Electronics', 'Fashion', 'Home & Lifestyle', 'Beauty'];
+const POPULAR_CATEGORIES = ['Electronics', 'Fashion', 'Beauty & Personal Care', 'Home & Living'];
 
 interface ProfessionalSearchProps {
   placeholder?: string;
@@ -20,6 +23,7 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
   const [isFocused, setIsFocused] = useState(false);
   const [liveSuggestions, setLiveSuggestions] = useState<Product[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   
   const searchRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +55,7 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
       } catch (e) {
         console.warn('Search error in ProfessionalSearch:', e);
       }
-    }, 200);
+    }, 150);
 
     return () => {
       active = false;
@@ -66,7 +70,7 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
     }
     setQuery(searchTerm);
     setIsFocused(false);
-    navigate(`/category/all?q=${encodeURIComponent(searchTerm)}`);
+    navigate(`/category/all?q=${encodeURIComponent(searchTerm.trim())}`);
   };
   
   const handleCategoryClick = (category: string) => {
@@ -94,7 +98,7 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
     }
     
     if (!('webkitSpeechRecognition' in window)) {
-      alert('Voice search is not supported in your browser.');
+      toast.error('Voice search is not supported in your browser.');
       return;
     }
 
@@ -103,7 +107,7 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
       stream.getTracks().forEach(track => track.stop());
     } catch (err) {
       console.error('Microphone permission denied', err);
-      alert('Please allow microphone access to use voice search.');
+      toast.error('Please allow microphone access to use voice search.');
       return;
     }
 
@@ -138,17 +142,52 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
     recognition.start();
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Image search: scans all vendor products using visual AI and displays identical / similar products
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Simulate image analysis and searching
-      setQuery('Analyzing image...');
-      setIsFocused(true);
-      
-      setTimeout(() => {
-        setQuery('Headphones'); // Simulated result
-        handleSearch('Headphones');
-      }, 1500);
+    if (!file) return;
+
+    // Reset input so same file can be re-selected if desired
+    event.target.value = '';
+
+    setIsAnalyzingImage(true);
+    setQuery('ছবি সার্চ করা হচ্ছে...');
+    setIsFocused(false);
+
+    const toastId = toast.loading('সকল ভেন্ডারের পণ্য থেকে ছবি মিলিয়ে দেখা হচ্ছে...');
+
+    try {
+      const allVendorProducts = await fetchAllMarketplaceProducts();
+      const result = await searchProductsByImage(file, allVendorProducts);
+
+      toast.dismiss(toastId);
+
+      const targetTerm = result.searchQuery || result.detectedItem;
+
+      if (result.matchedProducts.length > 0) {
+        toast.success(`${result.matchedProducts.length} টি মিল থাকা পণ্য পাওয়া গেছে!`);
+        // Navigate to CategoryView with the detected query term and pass matched products in state
+        navigate(`/category/all?q=${encodeURIComponent(targetTerm)}`, {
+          state: {
+            imageSearchMatches: result.matchedProducts,
+            detectedItem: result.detectedItem,
+            isImageSearch: true
+          }
+        });
+      } else if (targetTerm) {
+        toast('সরাসরি মিলে এমন ছবি পাওয়া যায়নি, নাম দিয়ে অনুসন্ধান করা হচ্ছে...', { icon: '🔍' });
+        navigate(`/category/all?q=${encodeURIComponent(targetTerm)}`);
+      } else {
+        toast.error('দুঃখিত, এই ছবির সাথে মিল থাকা কোনো পণ্য পাওয়া যায়নি।');
+        navigate(`/category/all?q=${encodeURIComponent(file.name.replace(/\.[^/.]+$/, ''))}`);
+      }
+    } catch (err) {
+      console.error('Visual image search error:', err);
+      toast.dismiss(toastId);
+      toast.error('ছবি প্রসেস করতে সাময়িক সমস্যা হয়েছে। নাম দিয়ে খুঁজুন।');
+    } finally {
+      setIsAnalyzingImage(false);
+      setQuery('');
     }
   };
 
@@ -160,12 +199,13 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
-          placeholder={isListening ? 'Listening...' : placeholder}
+          placeholder={isListening ? 'শুনছি, বলুন...' : isAnalyzingImage ? 'ছবি বিশ্লেষণ করা হচ্ছে...' : placeholder}
           className="w-full pl-4 pr-32 py-2.5 bg-slate-100 border border-transparent focus:bg-white focus:border-primary-main focus:ring-2 focus:ring-primary-main/20 rounded-lg text-sm transition-all duration-300 outline-none placeholder:text-slate-500"
         />
         <div className="absolute right-2 flex items-center gap-1">
-          {query && (
+          {query && !isAnalyzingImage && (
             <button 
+              type="button"
               onClick={clearSearch}
               className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
               title="Clear"
@@ -173,20 +213,32 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
               <X className="w-4 h-4" />
             </button>
           )}
-          <button 
-            onClick={startVoiceSearch}
-            className={`p-1.5 transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-slate-400 hover:text-primary-main'}`}
-            title="Voice Search"
-          >
-            <Mic className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 text-slate-400 hover:text-primary-main transition-colors"
-            title="Image Search"
-          >
-            <Camera className="w-4 h-4" />
-          </button>
+
+          {isAnalyzingImage ? (
+            <div className="p-1.5 text-primary-main animate-spin" title="Analyzing image">
+              <Loader2 className="w-4 h-4" />
+            </div>
+          ) : (
+            <>
+              <button 
+                type="button"
+                onClick={startVoiceSearch}
+                className={`p-1.5 transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-slate-400 hover:text-primary-main'}`}
+                title="ভয়েস দিয়ে সার্চ করুন"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+              <button 
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1.5 text-slate-400 hover:text-primary-main transition-colors"
+                title="ছবি দিয়ে সব ভেন্ডারের প্রোডাক্ট সার্চ করুন"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
+            </>
+          )}
+
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -195,8 +247,10 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
             className="hidden" 
           />
           <button 
+            type="button"
             onClick={() => handleSearch(query)}
-            className="p-1.5 bg-primary-main text-white rounded-md hover:bg-sky-600 transition-colors ml-1"
+            className="p-1.5 bg-primary-main text-white rounded-md hover:bg-sky-600 transition-colors ml-1 cursor-pointer"
+            title="Search"
           >
             <Search className="w-4 h-4" />
           </button>
@@ -227,8 +281,9 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
                       {RECENT_SEARCHES.map((term) => (
                         <button
                           key={term}
+                          type="button"
                           onClick={() => handleSearch(term)}
-                          className="px-3 py-1.5 bg-slate-50 text-slate-700 text-xs rounded-full hover:bg-slate-100 transition-colors border border-slate-100"
+                          className="px-3 py-1.5 bg-slate-50 text-slate-700 text-xs rounded-full hover:bg-slate-100 transition-colors border border-slate-100 cursor-pointer"
                         >
                           {term}
                         </button>
@@ -245,8 +300,9 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
                       {TRENDING_SEARCHES.map((term, idx) => (
                         <button
                           key={term}
+                          type="button"
                           onClick={() => handleSearch(term)}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 text-rose-700 text-xs rounded-full hover:bg-rose-100 transition-colors border border-rose-100"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 text-rose-700 text-xs rounded-full hover:bg-rose-100 transition-colors border border-rose-100 cursor-pointer"
                         >
                           <span className="font-bold">{idx + 1}</span> {term}
                         </button>
@@ -261,8 +317,9 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
                       {POPULAR_CATEGORIES.map((cat) => (
                         <button
                           key={cat}
+                          type="button"
                           onClick={() => handleCategoryClick(cat)}
-                          className="text-left px-3 py-2 text-sm text-slate-600 hover:text-primary-main hover:bg-slate-50 rounded-lg transition-colors"
+                          className="text-left px-3 py-2 text-sm text-slate-600 hover:text-primary-main hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
                         >
                           {cat}
                         </button>
@@ -276,15 +333,16 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
                     liveSuggestions.map((product) => (
                       <button 
                         key={product.id}
+                        type="button"
                         onClick={() => handleProductClick(product)}
-                        className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-4 transition-colors border-b border-slate-50 last:border-0"
+                        className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-4 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
                       >
                         <img referrerPolicy="no-referrer" src={product.image} alt={product.name} className="w-12 h-12 object-cover rounded-md" />
                         <div className="flex-1">
                           <h4 className="text-sm font-medium text-slate-800 line-clamp-1">{product.name}</h4>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-sm font-bold text-primary-main">${product.price}</span>
-                            {product.discount > 0 && (
+                            <span className="text-sm font-bold text-primary-main">৳{product.price}</span>
+                            {product.discount && product.discount > 0 && (
                               <span className="text-xs text-rose-500 bg-rose-50 px-1 rounded">-{product.discount}%</span>
                             )}
                             <span className="text-xs text-amber-500 ml-auto flex items-center">⭐ {product.rating}</span>
@@ -298,8 +356,9 @@ export default function ProfessionalSearch({ placeholder = 'Search in RJ WORLD B
                     </div>
                   )}
                   <button 
+                    type="button"
                     onClick={() => handleSearch(query)}
-                    className="w-full text-center px-4 py-3 text-sm text-primary-main hover:bg-primary-main/5 font-medium border-t border-slate-100"
+                    className="w-full text-center px-4 py-3 text-sm text-primary-main hover:bg-primary-main/5 font-medium border-t border-slate-100 cursor-pointer"
                   >
                     View all results for "{query}"
                   </button>
